@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shooting Game with Boss AI and Health Bars</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #222;
+        }
+        canvas {
+            display: block;
+            background-color: #000;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+        }
+        #level {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+        }
+        #startUI, #scoreMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 10;
+        }
+        #startUI button, #scoreMessage button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #scoreMessage {
+            display: none; /* Initially hidden */
+        }
+        #startUI {
+            display: block; /* Display start UI initially */
+        }
+        .health-bar {
+            position: absolute;
+            height: 10px;
+            background-color: red;
+        }
+        .health-bar.player {
+            top: 50px;
+            left: 10px;
+            width: 200px;
+        }
+        .health-bar.boss {
+            top: 50px;
+            left: calc(50% - 105px);
+            width: 210px;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <div id="level">Level: 1</div>
+    <div id="startUI">
+        <h1>Welcome to the Shooting Game!</h1>
+        <p>Press the button below to start.</p>
+        <button onclick="startGame()">Start Game</button>
+    </div>
+    <div id="scoreMessage">
+        <h2>Congratulations! You reached Level <span id="nextLevel">2</span>!</h2>
+        <button onclick="startNextLevel()">Start Next Level</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="playerHealth" class="health-bar player"></div>
+    <div id="bossHealth" class="health-bar boss"></div>
+
+    <!-- Sound Effects -->
+    <audio id="shootSound" src="https://example.com/shoot.mp3"></audio>
+    <audio id="hitSound" src="https://example.com/hit.mp3"></audio>
+    <audio id="bossSound" src="https://example.com/boss.mp3"></audio>
+    <audio id="bossAttackSound" src="https://example.com/boss-attack.mp3"></audio>
+    <audio id="playerHitSound" src="https://example.com/player-hit.mp3"></audio>
+	
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreElement = document.getElementById("score");
+        const levelElement = document.getElementById("level");
+        const startUI = document.getElementById("startUI");
+        const scoreMessage = document.getElementById("scoreMessage");
+        const nextLevelText = document.getElementById("nextLevel");
+        const playerHealthBar = document.getElementById("playerHealth");
+        const bossHealthBar = document.getElementById("bossHealth");
+
+        // Set canvas dimensions
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Player object
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            width: 50,
+            height: 50,
+            color: "blue",
+            speed: 10,
+            health: 100
+        };
+
+        // Bullet array
+        const bullets = [];
+
+        // Target and Boss arrays
+        let targets = [];
+        let bosses = [];
+
+        // Score and Level variables
+        let score = 0;
+        let level = 1;
+        let bossAttackInterval;
+
+        // Sound elements
+        const shootSound = document.getElementById("shootSound");
+        const hitSound = document.getElementById("hitSound");
+        const bossSound = document.getElementById("bossSound");
+        const bossAttackSound = document.getElementById("bossAttackSound");
+        const playerHitSound = document.getElementById("playerHitSound");
+
+        // Function to create targets
+        function createTargets() {
+            targets = [];
+            const targetCount = level * 5;
+            for (let i = 0; i < targetCount; i++) {
+                targets.push({
+                    x: Math.random() * (canvas.width - 50),
+                    y: Math.random() * (canvas.height / 2),
+                    width: 50,
+                    height: 50,
+                    color: "red"
+                });
+            }
+        }
+
+        // Function to create a boss
+        function createBoss() {
+            bosses = [{
+                x: canvas.width / 2 - 50,
+                y: 50,
+                width: 100,
+                height: 100,
+                color: "purple",
+                health: 5 + level, // Boss health increases with level
+                attackInterval: 2000 // Boss attacks every 2 seconds
+            }];
+            startBossAI();
+        }
+
+        // Function to start Boss AI
+        function startBossAI() {
+            bossAttackInterval = setInterval(() => {
+                if (bosses.length > 0) {
+                    const boss = bosses[0];
+                    if (Math.random() > 0.5) {
+                        boss.x += Math.random() > 0.5 ? 20 : -20; // Boss moves left or right
+                    }
+                    if (Math.random() > 0.5) {
+                        boss.y += Math.random() > 0.5 ? 20 : -20; // Boss moves up or down
+                    }
+                    bossAttackSound.play(); // Play boss attack sound
+                    if (Math.random() > 0.5) {
+                        attackPlayer();
+                    }
+                }
+            }, bosses[0].attackInterval);
+        }
+
+        // Function to attack player
+        function attackPlayer() {
+            player.health -= 10; // Boss attack reduces player health by 10
+            updateHealthBars();
+            playerHitSound.play(); // Play player hit sound
+            if (player.health <= 0) {
+                alert("Game Over!");
+                location.reload(); // Reload the page to restart the game
+            }
+        }
+
+        // Function to update health bars
+        function updateHealthBars() {
+            playerHealthBar.style.width = `${player.health}px`;
+            if (bosses.length > 0) {
+                const boss = bosses[0];
+                bossHealthBar.style.width = `${boss.health * 40}px`;
+            }
+        }
+
+        // Move player
+        function movePlayer(event) {
+            if (event.key === "ArrowLeft" && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (event.key === "ArrowRight" && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+            if (event.key === "ArrowUp" && player.y > 0) {
+                player.y -= player.speed;
+            }
+            if (event.key === "ArrowDown" && player.y < canvas.height - player.height) {
+                player.y += player.speed;
+            }
+        }
+
+        // Shoot bullet
+        function shootBullet() {
+            bullets.push({
+                x: player.x + player.width / 2 - 5,
+                y: player.y,
+                width: 10,
+                height: 20,
+                color: "yellow",
+                speed: 10
+            });
+            shootSound.play(); // Play shooting sound
+        }
+
+        // Game loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw player
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // Draw and move bullets
+            for (let i = 0; i < bullets.length; i++) {
+                const bullet = bullets[i];
+                bullet.y -= bullet.speed;
+                ctx.fillStyle = bullet.color;
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+
+                // Check collision with targets
+                for (let j = 0; j < targets.length; j++) {
+                    const target = targets[j];
+                    if (
+                        bullet.x < target.x + target.width &&
+                        bullet.x + bullet.width > target.x &&
+                        bullet.y <
+                    bullet.y < target.y + target.height &&
+                    bullet.y + bullet.height > target.y
+                ) {
+                    targets.splice(j, 1);
+                    bullets.splice(i, 1);
+                    i--;
+                    score += 10; // Increase score by 10 for each hit
+                    scoreElement.textContent = `Score: ${score}`;
+                    hitSound.play(); // Play hit sound
+                    break;
+                }
+            }
+
+            // Check collision with bosses
+            for (let k = 0; k < bosses.length; k++) {
+                const boss = bosses[k];
+                if (
+                    bullet.x < boss.x + boss.width &&
+                    bullet.x + bullet.width > boss.x &&
+                    bullet.y < boss.y + boss.height &&
+                    bullet.y + bullet.height > boss.y
+                ) {
+                    bullets.splice(i, 1);
+                    i--;
+                    boss.health -= 1; // Decrease boss health
+                    updateHealthBars();
+                    if (boss.health <= 0) {
+                        bosses.splice(k, 1); // Remove boss if health is zero
+                        score += 50; // Increase score by 50 for defeating the boss
+                        scoreElement.textContent = `Score: ${score}`;
+                        bossSound.play(); // Play boss defeated sound
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Draw targets
+        for (let i = 0; i < targets.length; i++) {
+            const target = targets[i];
+            ctx.fillStyle = target.color;
+            ctx.fillRect(target.x, target.y, target.width, target.height);
+        }
+
+        // Draw bosses
+        for (let i = 0; i < bosses.length; i++) {
+            const boss = bosses[i];
+            ctx.fillStyle = boss.color;
+            ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+        }
+
+        // Respawn targets if all are destroyed and no boss exists
+        if (targets.length === 0 && bosses.length === 0) {
+            if (score >= level * 200) { // Level up when score threshold is reached
+                level++;
+                if (level % 5 === 0) {
+                    createBoss(); // Create boss on every 5th level
+                } else {
+                    createTargets(); // Otherwise, create new targets
+                }
+                scoreElement.textContent = `Score: ${score}`;
+                levelElement.textContent = `Level: ${level}`;
+                showScoreMessage();
+            } else {
+                createTargets();
+            }
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Function to show the score message
+    function showScoreMessage() {
+        scoreMessage.style.display = "block";
+        nextLevelText.textContent = level;
+    }
+
+    // Function to start the game
+    function startGame() {
+        startUI.style.display = "none"; // Hide the start UI
+        gameLoop(); // Start the game loop
+    }
+
+    // Function to start the next level
+    function startNextLevel() {
+        scoreMessage.style.display = "none";
+        gameLoop(); // Resume the game loop
+    }
+
+    // Event listeners
+    document.addEventListener("keydown", movePlayer);
+    document.addEventListener("keydown", (event) => {
+        if (event.key === " ") {
+            shootBullet();
+        }
+    });
+</script>
+</body>
+</html>
